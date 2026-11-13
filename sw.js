@@ -1,5 +1,5 @@
 // Offline shell: the app opens even with no signal (weather shows last known).
-const CACHE = "us-v9";
+const CACHE = "us-v10";
 const SHELL = ["./", "index.html", "app.js", "config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
@@ -13,7 +13,7 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET" || url.origin !== location.origin) return; // APIs go straight to network
   // Network first so edits to config.js show up; fall back to cache offline.
   e.respondWith(
-    fetch(e.request).then((r) => { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); return r; })
+    fetch(e.request, { cache: "no-cache" }).then((r) => { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); return r; })
       .catch(() => caches.match(e.request).then((r) => r || caches.match("index.html")))
   );
 });

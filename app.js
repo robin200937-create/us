@@ -566,5 +566,14 @@ function renderAll() {
   setInterval(() => { if (!document.hidden) { refreshPings(); renderLegs(); } }, 60e3); // backup to the instant nudges
   setInterval(() => { if (!document.hidden) { renderSplit(); renderAurora(); renderCall(); } }, 10 * 6e4);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshPings().then(() => { renderAll(); renderFeed(); }); } });
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    // When a new version is published, swap to it automatically (once).
+    let reloaded = false;
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+    navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).then((reg) => {
+      reg.update().catch(() => {});
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) reg.update().catch(() => {}); });
+    }).catch(() => {});
+  }
 })();

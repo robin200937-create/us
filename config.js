@@ -20,6 +20,8 @@ window.LOVE_CONFIG = {
       note: "Lands 1:55 pm." },
     { id: "rov", name: "Rovaniemi", country: "Finland", flag: "🇫🇮", lat: 66.5039, lon: 25.7294, tz: "Europe/Helsinki",
       note: "Likely first stop by night train (to confirm). On the Arctic Circle." },
+    { id: "lev", name: "Levi",      country: "Finland", flag: "🇫🇮", lat: 67.8058, lon: 24.8085, tz: "Europe/Helsinki",
+      note: "Lapland fell resort near Kittilä, about 2.5 hours' drive north of Rovaniemi." },
     { id: "tos", name: "Tromsø",    country: "Norway",  flag: "🇳🇴", lat: 69.6496, lon: 18.9560, tz: "Europe/Oslo",
       note: "The villa, 5 km from the Fjellheisen cable car." },
   ],

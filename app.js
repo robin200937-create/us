@@ -545,10 +545,42 @@ function renderAll() {
   renderSplit(); renderAurora(); renderCall();
 }
 
+// ---------- refresh (button + swipe down) ----------
+let refreshing = false;
+async function hardRefresh() {
+  if (refreshing) return; refreshing = true;
+  const p = $("ptr"); p.classList.add("spin"); p.style.opacity = 1; p.style.transform = "translate(-50%,0)";
+  try {
+    const reg = navigator.serviceWorker && (await navigator.serviceWorker.getRegistration());
+    if (reg) await reg.update().catch(() => {});
+  } catch {}
+  // A full reload always picks up the newest version and the newest data.
+  setTimeout(() => location.reload(), 350);
+}
+function wirePullToRefresh() {
+  $("refreshBtn").onclick = hardRefresh;
+  let y0 = null, pulled = 0;
+  const p = $("ptr");
+  addEventListener("touchstart", (e) => { y0 = scrollY <= 0 && !$("sheet").classList.contains("open") ? e.touches[0].clientY : null; pulled = 0; }, { passive: true });
+  addEventListener("touchmove", (e) => {
+    if (y0 == null || refreshing) return;
+    pulled = Math.max(0, e.touches[0].clientY - y0);
+    const d = Math.min(pulled, 110);
+    p.style.opacity = Math.min(1, d / 70);
+    p.style.transform = `translate(-50%,${d * 0.6 - 60}px) rotate(${d * 3}deg)`;
+  }, { passive: true });
+  addEventListener("touchend", () => {
+    if (y0 == null || refreshing) return;
+    if (pulled > 80) hardRefresh();
+    else { p.style.opacity = 0; p.style.transform = "translate(-50%,-60px)"; }
+    y0 = null;
+  });
+}
+
 // ---------- boot ----------
 (async function boot() {
   await initStore();
-  renderLove(); wireUpload();
+  renderLove(); wireUpload(); wirePullToRefresh();
   $("whoBtn").onclick = setup;
   $("locSwitch").onclick = () => {
     const on = !LS.get("shareLoc", false); LS.set("shareLoc", on);

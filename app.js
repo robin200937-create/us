@@ -503,15 +503,16 @@ function closeSheet() { $("sheet").classList.remove("open"); }
 $("sheet").onclick = (e) => { if (e.target.id === "sheet" && who) closeSheet(); };
 async function safe(fn) { try { await fn(); } catch (e) { toast("That didn't send. Check your connection."); console.error(e); } }
 function setup() {
-  sheet(`<div class="label">Set up this phone</div>
-    <div style="margin-top:14px;font-weight:500">Who's using this phone?</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+  sheet(`<div class="center"><div class="heart serif" style="font-size:34px">♥</div>
+      <div class="serif" style="font-size:26px;line-height:1.1;margin-top:6px">Set up this phone</div></div>
+    <div style="margin-top:18px;font-weight:500;font-size:14px">Who's using this phone?</div>
+    <div class="who2">
       <button class="btn ${who === "her" ? "" : "ghost"}" data-w="her">${esc(C.her.name)}</button>
       <button class="btn ${who === "me" ? "" : "ghost"}" data-w="me">${esc(C.me.name)}</button></div>
-    ${configured ? `<div style="margin-top:18px;font-weight:500">Pairing code</div>
-    <div class="muted">Type the same secret phrase on both phones. It links your two phones.</div>
-    <input id="pairIn" placeholder="e.g. a long phrase only you two know" value="${esc(pairCode)}" autocapitalize="off" autocomplete="off">` : ""}
-    <button class="btn" style="width:100%;margin-top:18px" id="saveSetup">Done</button>`);
+    ${configured ? `<div style="margin-top:18px;font-weight:500;font-size:14px">Pairing code</div>
+    <div class="muted" style="font-size:12px">Type the same secret phrase on both phones to link them.</div>
+    <input id="pairIn" placeholder="A phrase only you two know" value="${esc(pairCode)}" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">` : ""}
+    <button class="btn" style="width:100%;margin-top:20px" id="saveSetup">Done</button>`);
   let pick = who;
   $("sheetIn").querySelectorAll("[data-w]").forEach((b) => (b.onclick = () => {
     pick = b.dataset.w; $("sheetIn").querySelectorAll("[data-w]").forEach((x) => x.classList.toggle("ghost", x !== b));

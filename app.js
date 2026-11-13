@@ -433,11 +433,24 @@ function evText(p) {
   if (p.kind === "visit") { try { return `${n} arrived in ${esc(JSON.parse(p.text).city)}`; } catch { return ""; } }
   return "";
 }
+let actPage = 0;
+const PER_PAGE = 10;
 function renderActivity() {
-  const items = PINGS.filter((p) => p.kind !== "loc" && evText(p)).slice(0, 8);
-  $("activity").innerHTML = items.length
-    ? items.map((p) => `<div class="ev"><span>${evText(p)}</span><span class="t">${ago(p.created_at)}</span></div>`).join("")
-    : `<div class="ev"><span class="muted">${synced() ? "Nothing yet." : "Not synced yet, so this only shows what happens on this phone. See SETUP.md."}</span></div>`;
+  const items = PINGS.filter((p) => p.kind !== "loc" && evText(p));
+  const pages = Math.max(1, Math.ceil(items.length / PER_PAGE));
+  if (actPage > pages - 1) actPage = pages - 1;
+  const shown = items.slice(actPage * PER_PAGE, actPage * PER_PAGE + PER_PAGE);
+  const list = shown.length
+    ? shown.map((p) => `<div class="ev"><span>${evText(p)}</span><span class="t">${ago(p.created_at)}</span></div>`).join("")
+    : `<div class="ev"><span class="muted">${synced() ? "Nothing yet." : "Not synced yet, so this only shows what happens on this phone."}</span></div>`;
+  const nav = pages > 1
+    ? `<div class="pager"><button class="btn small ghost" id="pgNewer" ${actPage === 0 ? "disabled" : ""}>← Newer</button>
+        <span class="muted">Page ${actPage + 1} of ${pages}</span>
+        <button class="btn small ghost" id="pgOlder" ${actPage >= pages - 1 ? "disabled" : ""}>Older →</button></div>`
+    : "";
+  $("activity").innerHTML = list + nav;
+  if ($("pgNewer")) $("pgNewer").onclick = () => { actPage = Math.max(0, actPage - 1); renderActivity(); };
+  if ($("pgOlder")) $("pgOlder").onclick = () => { actPage = Math.min(pages - 1, actPage + 1); renderActivity(); };
 }
 
 // ---------- postcards ----------

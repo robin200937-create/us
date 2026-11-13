@@ -159,6 +159,8 @@ button{font-family:inherit;cursor:pointer;border:0;color:inherit}
 .ptr.spin span{display:inline-block;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .refresh{position:absolute;right:16px;top:calc(env(safe-area-inset-top) + 10px);width:34px;height:34px;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--soft);font-size:16px;display:flex;align-items:center;justify-content:center}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:12px}
+.pager .btn:disabled{opacity:.35}
 </style>
 </head>
 <body>

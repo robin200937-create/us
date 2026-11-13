@@ -3,7 +3,7 @@
 // ============================================================
 window.LOVE_CONFIG = {
   me:  { name: "Home", emoji: "🏠" },   // shown as "Home" on screen
-  her: { name: "MJ",     emoji: "👩🏽" },
+  her: { name: "Diyanah", emoji: "👩🏽" },
 
   // Home base
   home: { name: "Singapore", lat: 1.3521, lon: 103.8198, tz: "Asia/Singapore", flag: "🇸🇬" },

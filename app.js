@@ -138,30 +138,37 @@ async function placeName(lat, lon) {
 }
 const flag = (cc) => (cc && cc.length === 2 ? String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 127397 + c.charCodeAt(0))) : "📍");
 async function onPosition(pos) {
-  // Rounded to ~1 km: enough for weather and the town name, not a street address.
-  const lat = +pos.coords.latitude.toFixed(2), lon = +pos.coords.longitude.toFixed(2);
-  const moved = !lastSent || haversine(lastSent, { lat, lon }) > 2;
-  const stale = !lastSent || Date.now() - lastSent.t > 15 * 6e4;
+  // About 100 m precision: her real spot, so the app can work out distances and arrival times.
+  const lat = +pos.coords.latitude.toFixed(3), lon = +pos.coords.longitude.toFixed(3);
+  const spd = pos.coords.speed != null && pos.coords.speed >= 0 ? +pos.coords.speed.toFixed(1) : null; // m/s
+  LS.set("locBlocked", false);
+  const moved = !lastSent || haversine(lastSent, { lat, lon }) >= 1;
+  const stale = !lastSent || Date.now() - lastSent.t > 5 * 6e4;
   if (!moved && !stale) return;
   const n = await placeName(lat, lon);
   lastSent = { lat, lon, t: Date.now() }; LS.set("lastLocSent", lastSent);
-  await safe(() => store.addPing("loc", JSON.stringify({ lat, lon, ...n })));
+  await safe(() => store.addPing("loc", JSON.stringify({ lat, lon, spd, ...n })));
   if (n.city && n.city !== LS.get("lastCity", "")) { LS.set("lastCity", n.city); await safe(() => store.addPing("visit", JSON.stringify({ lat, lon, ...n }))); }
-  $("locStatus").textContent = `On. Showing ${n.city || "your area"} (to about 1 km).`;
-  await refreshPings(); renderSplit(); renderChips();
+  $("locStatus").textContent = `On. Sharing ${n.city || "your spot"}, updated ${clockIn(C.home.tz)} SG time.`;
+  await refreshPings(); renderSplit(); renderChips(); renderJourney(); renderCall();
 }
 function startLoc() {
   if (!navigator.geolocation) { toast("Location isn't available on this browser"); return; }
   if (watchId != null) return;
   watchId = navigator.geolocation.watchPosition(onPosition, (e) => {
-    LS.set("shareLoc", false); renderLocToggle();
-    toast(e.code === 1 ? "Location permission was denied in Settings" : "Couldn't get location");
+    if (e.code === 1) { LS.set("locBlocked", true); LS.set("shareLoc", false); stopLoc(); }
+    renderLocToggle();
+    toast(e.code === 1 ? "iPhone is blocking location (see the note)" : "Couldn't get a location fix, still trying");
   }, { enableHighAccuracy: false, maximumAge: 5 * 6e4, timeout: 30e3 });
 }
 function stopLoc() { if (watchId != null) navigator.geolocation.clearWatch(watchId); watchId = null; }
 function renderLocToggle() {
   const on = LS.get("shareLoc", false);
   $("locSwitch").classList.toggle("on", on);
+  if (LS.get("locBlocked", false)) {
+    $("locStatus").innerHTML = `<b style="color:var(--accent)">iPhone is blocking location.</b> Go to Settings → Privacy &amp; Security → Location Services → <b>Safari Websites</b> → <b>While Using the App</b>, then turn this on again.`;
+    return;
+  }
   if (!on) $("locStatus").textContent = "Off. Your side shows the planned location.";
   else if ($("locStatus").textContent.startsWith("Off")) $("locStatus").textContent = "On. Finding you…";
 }
@@ -176,6 +183,10 @@ function legPlace(l) {
 const livePlace = (loc) => ({ id: "live", name: loc.city || "Somewhere", flag: flag(loc.cc), lat: loc.lat, lon: loc.lon, tz: null, live: loc.at });
 function herNow(now = Date.now()) {
   const active = legs.find((l) => now >= l.depT && now < l.arrT);
+  const fresh = latestLoc("her");
+  const freshAge = fresh ? now - Date.parse(fresh.at) : Infinity;
+  // Her real location beats the planned times whenever it's recent.
+  if (active && fresh && freshAge < 45 * 6e4) return { mode: "live", place: livePlace(fresh), leg: active };
   if (active) return { mode: "moving", leg: active };
   if (dateIn(C.home.tz) > C.tripEnd) return { mode: "home", place: C.home };
   const lastDone = [...legs].reverse().find((l) => now >= l.arrT);
@@ -189,6 +200,26 @@ function herNow(now = Date.now()) {
   if (checkin && (!lastDone || Date.parse(checkin.created_at) > lastDone.arrT) && stopById(checkin.text)) return { mode: "stay", place: stopById(checkin.text) };
   if (lastDone && next && next.depT - now < 12 * 36e5 && next.from === lastDone.to) return { mode: "layover", place: legPlace(lastDone), next };
   return { mode: "stay", place: lastDone ? legPlace(lastDone) : C.stops[0] };
+}
+const SPEED = { flight: 780, train: 85, road: 70 }; // km/h, rough averages
+const DETOUR = { flight: 1.0, train: 1.25, road: 1.3 }; // roads and rails aren't straight lines
+function eta(from, to, kind, spdMs) {
+  const km = haversine(from, to) * DETOUR[kind];
+  const live = spdMs != null && spdMs > 3 ? spdMs * 3.6 : null; // she's moving: use her real speed
+  const kmh = live ? Math.min(live, SPEED[kind] * 1.6) : SPEED[kind];
+  return { km: Math.round(km), ms: (km / kmh) * 36e5, live: !!live };
+}
+function nextTarget(st) {
+  const now = Date.now();
+  if (st.leg) return { name: st.leg.to, lat: st.leg.toLat, lon: st.leg.toLon, kind: st.leg.kind === "flight" ? "flight" : "train", leg: st.leg };
+  const cur = (st.place && st.place.name || "").toLowerCase();
+  const been = new Set(visits().map((v) => v.name.toLowerCase()));
+  const idx = C.stops.findIndex((s) => s.name.toLowerCase() === cur);
+  const rest = idx >= 0 ? C.stops.slice(idx + 1) : C.stops.filter((s) => !been.has(s.name.toLowerCase()) && s.name.toLowerCase() !== cur);
+  const nextLeg = legs.find((l) => l.depT > now);
+  const s = rest[0];
+  if (!s) return null;
+  return { name: s.name, lat: s.lat, lon: s.lon, kind: nextLeg && nextLeg.to === s.name ? (nextLeg.kind === "flight" ? "flight" : "train") : "road" };
 }
 function meNow() {
   const loc = latestLoc("me");
@@ -205,6 +236,18 @@ function renderHeader() {
   else { const left = daysBetween(today, C.tripEnd); sub = `Day <b>${dayN}</b> of ${total} · ${left === 0 ? "<b>home today</b>" : `<b>${left}</b> day${left > 1 ? "s" : ""} to go`}`; }
   $("sub").innerHTML = sub;
   $("days").innerHTML = Array.from({ length: total }, (_, i) => `<i class="${i + 1 <= dayN ? "on" : ""} ${i + 1 === dayN ? "today" : ""}">♥</i>`).join("");
+}
+
+// ---------- arrival banner ----------
+function renderBanner() {
+  const p = PINGS.find((x) => x.sender === "her" && (x.kind === "landed" || x.kind === "visit"));
+  const box = $("banner");
+  if (!p || Date.now() - Date.parse(p.created_at) > 6 * 36e5 || LS.get("bannerSeen", "") === p.created_at) { box.innerHTML = ""; return; }
+  let text = "";
+  if (p.kind === "landed") { const l = legs.find((x) => x.id === p.text); text = `✓ ${esc(C.her.name)} ${l && l.kind === "train" ? "arrived" : "landed"} safe${l ? " in " + esc(l.to) : ""}`; }
+  else { try { text = `📍 ${esc(C.her.name)} arrived in ${esc(JSON.parse(p.text).city)}`; } catch { return; } }
+  box.innerHTML = `<div class="banner"><span>${text}</span><span class="muted" style="color:inherit;opacity:.7;font-weight:400">${ago(p.created_at)}</span><button class="x" id="bannerX" aria-label="Dismiss">×</button></div>`;
+  $("bannerX").onclick = () => { LS.set("bannerSeen", p.created_at); box.innerHTML = ""; };
 }
 
 // ---------- journey banner ----------
@@ -224,6 +267,30 @@ function arcSVG(l, t) {
 }
 function renderJourney() {
   const now = Date.now(), st = herNow(now), box = $("journey");
+  if (st.mode === "live" && dateIn(C.home.tz) <= C.tripEnd) {
+    const loc = latestLoc("her"), tgt = nextTarget(st);
+    if (tgt && loc && haversine(loc, tgt) > 3) {
+      const e = eta(loc, tgt, tgt.kind, loc.spd);
+      const arrive = new Date(now + e.ms);
+      const tzT = (st.leg && CODE_TZ[st.leg.toCode]) || (C.stops.find((s) => s.name === tgt.name) || {}).tz || C.home.tz;
+      let bar = "";
+      if (st.leg) {
+        const total = haversine({ lat: st.leg.fromLat, lon: st.leg.fromLon }, tgt) || 1;
+        const t = Math.max(0, Math.min(1, 1 - haversine(loc, tgt) / total));
+        bar = `${arcSVG(st.leg, t)}<div class="bar"><i style="width:${(t * 100).toFixed(1)}%"></i></div>`;
+      }
+      const how = tgt.kind === "flight" ? "by air" : tgt.kind === "train" ? "by train" : "by road";
+      box.innerHTML = `<div class="card"><span class="label">${st.leg ? "On the way · live" : "Next stop"}</span>
+        <div class="big">${st.leg ? `${esc(st.place.name)} → ${esc(tgt.name)}` : esc(tgt.name)}</div>
+        ${bar}
+        <div class="row" style="margin-top:8px"><span><b>${e.km.toLocaleString()} km</b> <span class="muted">${how}</span></span><b>about ${fmtDur(e.ms)}</b></div>
+        ${st.leg && arrive.getTime() <= st.leg.arrT
+          ? `<div class="muted">On track for the scheduled ${clockIn(tzT, new Date(st.leg.arrT))} local · ${clockIn(C.home.tz, new Date(st.leg.arrT))} Singapore</div>`
+          : `<div class="muted">${st.leg ? "Running late? Live estimate:" : "If she left now:"} around ${clockIn(tzT, arrive)} local · ${clockIn(C.home.tz, arrive)} Singapore${e.live ? " (her current speed)" : ""}</div>
+             ${st.leg ? `<div class="muted">Scheduled: ${clockIn(tzT, new Date(st.leg.arrT))} local</div>` : ""}`}</div>`;
+      return;
+    }
+  }
   if (st.mode === "moving") {
     const l = st.leg, t = Math.min(1, (now - l.depT) / (l.arrT - l.depT));
     box.innerHTML = `<div class="card"><span class="label">${l.kind === "train" ? "On the train" : "In the air"} · ${l.code}</span>
@@ -261,7 +328,8 @@ async function fillHalf(el, sender, place, extra = "") {
   }
   el.innerHTML = `<div class="label">${esc(nameOf(sender))}</div>
     <div class="place">${place.flag || ""} ${esc(place.name)}</div>
-    ${place.live ? `<div class="live" ${Date.now() - Date.parse(place.live) > 3 * 36e5 ? 'style="opacity:.6"' : ""}>${Date.now() - Date.parse(place.live) > 3 * 36e5 ? "Last seen" : "Live"} · ${ago(place.live)}</div>` : ""}
+    ${place.live && sender === "her" ? `<a class="sm" style="color:inherit;text-decoration:underline" href="https://maps.apple.com/?ll=${place.lat},${place.lon}&q=${encodeURIComponent(nameOf("her"))}" target="_blank" rel="noopener">Open in Maps</a>` : ""}
+    ${place.live ? `<div class="live" ${Date.now() - Date.parse(place.live) > 20 * 6e4 ? 'style="opacity:.6"' : ""}>${Date.now() - Date.parse(place.live) > 20 * 6e4 ? "Last seen" : "Live"} · ${ago(place.live)}</div>` : ""}
     <div class="clock" data-tz="${tz}">${clockIn(tz)}</div><div class="sm">${dayName(tz)}</div>
     ${wx}${extra}<div class="status">${status}</div>`;
   return d ? { d, tz } : { d: null, tz };
@@ -501,6 +569,7 @@ function renderLegs() {
       ${tzF !== C.home.tz ? `<div class="muted">Singapore time ${clockIn(C.home.tz, new Date(l.depT))} → ${clockIn(C.home.tz, new Date(l.arrT))}</div>` : ""}${action}</div></div>`;
   }).join("");
   $("legs").querySelectorAll("[data-land]").forEach((b) => (b.onclick = async () => {
+    if (b.disabled) return; b.disabled = true; b.textContent = "Sending… ✓";
     await safe(() => store.addPing("landed", b.dataset.land)); toast("Sent"); await refreshPings(); renderLegs();
   }));
 }
@@ -547,13 +616,13 @@ async function refreshPings() {
   const fresh = PINGS.filter((p) => p.sender !== who && Date.parse(p.created_at) > lastSeen && p.kind !== "loc");
   if (fresh.length && lastSeen) { const p = fresh[0]; toast(evText(p).replace(/<[^>]+>/g, "")); if (p.kind === "heart") float(); }
   if (PINGS[0]) { lastSeen = Math.max(lastSeen, Date.parse(PINGS[0].created_at)); LS.set("lastSeen", lastSeen); }
-  renderActivity();
+  renderActivity(); renderBanner();
 }
 function tickClocks() { document.querySelectorAll(".clock[data-tz]").forEach((el) => (el.textContent = clockIn(el.dataset.tz))); }
 function renderAll() {
   const two = synced();
   ["locCard", "loveCard", "pcCard"].forEach((id) => ($(id).hidden = !two));
-  renderHeader(); renderJourney(); renderChips(); renderNotes(); renderLegs(); renderActivity(); renderLocToggle();
+  renderHeader(); renderBanner(); renderJourney(); renderChips(); renderNotes(); renderLegs(); renderActivity(); renderLocToggle();
   $("mode").textContent = `${who ? "This phone: " + nameOf(who) : "Not set up"}${synced() ? " · synced ♡" : ""}`;
   renderSplit(); renderAurora(); renderCall();
 }
@@ -596,7 +665,7 @@ function wirePullToRefresh() {
   renderLove(); wireUpload(); wirePullToRefresh();
   $("whoBtn").onclick = setup;
   $("locSwitch").onclick = () => {
-    const on = !LS.get("shareLoc", false); LS.set("shareLoc", on);
+    const on = !LS.get("shareLoc", false); LS.set("shareLoc", on); LS.set("locBlocked", false);
     if (on) startLoc(); else stopLoc();
     renderLocToggle();
   };

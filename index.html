@@ -161,6 +161,8 @@ button{font-family:inherit;cursor:pointer;border:0;color:inherit}
 .refresh{position:absolute;right:16px;top:calc(env(safe-area-inset-top) + 10px);width:34px;height:34px;border-radius:50%;background:var(--card);border:1px solid var(--line);color:var(--soft);font-size:16px;display:flex;align-items:center;justify-content:center}
 .pager{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:12px}
 .pager .btn:disabled{opacity:.35}
+.banner{display:flex;align-items:center;gap:10px;background:var(--sage);color:var(--sage-ink);border-radius:16px;padding:12px 14px;margin:12px 0;font-weight:500;animation:pop .25s ease-out}
+.banner .x{margin-left:auto;background:none;color:inherit;opacity:.6;font-size:18px;padding:0 4px}
 </style>
 </head>
 <body>
@@ -174,6 +176,7 @@ button{font-family:inherit;cursor:pointer;border:0;color:inherit}
   <div class="days" id="days"></div>
 </header>
 
+<div id="banner"></div>
 <section id="journey"></section>
 
 <div class="split">

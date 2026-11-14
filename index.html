@@ -163,6 +163,13 @@ button{font-family:inherit;cursor:pointer;border:0;color:inherit}
 .pager .btn:disabled{opacity:.35}
 .banner{display:flex;align-items:center;gap:10px;background:var(--sage);color:var(--sage-ink);border-radius:16px;padding:12px 14px;margin:12px 0;font-weight:500;animation:pop .25s ease-out}
 .banner .x{margin-left:auto;background:none;color:inherit;opacity:.6;font-size:18px;padding:0 4px}
+.banner.warn{background:#fdf0dc;color:#8a5a12;flex-wrap:wrap}
+.banner .go{background:#8a5a12;color:#fff;border-radius:10px;padding:6px 12px;font-size:13px;font-weight:600}
+.feed.strip{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:4px;margin:0 -4px}
+.feed.strip::-webkit-scrollbar{display:none}
+.feed.strip .pc{flex:0 0 84%;scroll-snap-align:center}
+.pcount{text-align:center;font-size:12px;color:var(--soft);margin-top:8px}
+.pcfull img{width:100%;border-radius:12px;display:block}
 </style>
 </head>
 <body>
@@ -177,6 +184,7 @@ button{font-family:inherit;cursor:pointer;border:0;color:inherit}
 </header>
 
 <div id="banner"></div>
+<div id="locBanner"></div>
 <section id="journey"></section>
 
 <div class="split">
@@ -229,6 +237,7 @@ button{font-family:inherit;cursor:pointer;border:0;color:inherit}
     <input type="file" id="file" accept="image/*" hidden>
   </div>
   <div class="feed" id="feed"></div>
+  <div class="pcount" id="pcount"></div>
 </section>
 
 <section class="card">

@@ -150,14 +150,14 @@ async function onPosition(pos) {
   await safe(() => store.addPing("loc", JSON.stringify({ lat, lon, spd, ...n })));
   if (n.city && n.city !== LS.get("lastCity", "")) { LS.set("lastCity", n.city); await safe(() => store.addPing("visit", JSON.stringify({ lat, lon, ...n }))); }
   $("locStatus").textContent = `On. Sharing ${n.city || "your spot"}, updated ${clockIn(C.home.tz)} SG time.`;
-  await refreshPings(); renderSplit(); renderChips(); renderJourney(); renderCall();
+  await refreshPings(); renderSplit(); renderChips(); renderJourney(); renderCall(); renderLocBanner();
 }
 function startLoc() {
   if (!navigator.geolocation) { toast("Location isn't available on this browser"); return; }
   if (watchId != null) return;
   watchId = navigator.geolocation.watchPosition(onPosition, (e) => {
     if (e.code === 1) { LS.set("locBlocked", true); LS.set("shareLoc", false); stopLoc(); }
-    renderLocToggle();
+    renderLocToggle(); renderLocBanner();
     toast(e.code === 1 ? "iPhone is blocking location (see the note)" : "Couldn't get a location fix, still trying");
   }, { enableHighAccuracy: false, maximumAge: 5 * 6e4, timeout: 30e3 });
 }
@@ -248,6 +248,28 @@ function renderBanner() {
   else { try { text = `📍 ${esc(C.her.name)} arrived in ${esc(JSON.parse(p.text).city)}`; } catch { return; } }
   box.innerHTML = `<div class="banner"><span>${text}</span><span class="muted" style="color:inherit;opacity:.7;font-weight:400">${ago(p.created_at)}</span><button class="x" id="bannerX" aria-label="Dismiss">×</button></div>`;
   $("bannerX").onclick = () => { LS.set("bannerSeen", p.created_at); box.innerHTML = ""; };
+}
+
+// ---------- "your location isn't updating" (her phone only) ----------
+let locBannerHidden = false; // hidden until the app is opened again
+function renderLocBanner() {
+  const box = $("locBanner");
+  if (who !== "her" || !synced() || locBannerHidden || dateIn(C.home.tz) > C.tripEnd) { box.innerHTML = ""; return; }
+  const blocked = LS.get("locBlocked", false), on = LS.get("shareLoc", false);
+  const mine = latestLoc("her"), age = mine ? Date.now() - Date.parse(mine.at) : Infinity;
+  if (on && !blocked && age < 30 * 6e4) { box.innerHTML = ""; return; }
+  if (on && !blocked && watchId != null && age === Infinity) { box.innerHTML = ""; return; } // still finding her first fix
+  const msg = blocked
+    ? `📍 Your location is blocked. Go to Settings → Privacy &amp; Security → Location Services → <b>Safari Websites</b> → <b>While Using the App</b>, then tap Try again.`
+    : `📍 Your location isn't updating, so your side can't show where you really are.`;
+  box.innerHTML = `<div class="banner warn"><span style="flex:1 1 200px">${msg}</span>
+    <button class="go" id="locGo">${blocked ? "Try again" : "Turn on"}</button><button class="x" id="locX" aria-label="Hide">×</button></div>`;
+  $("locGo").onclick = () => {
+    LS.set("locBlocked", false); LS.set("shareLoc", true); stopLoc(); startLoc(); renderLocToggle();
+    box.innerHTML = `<div class="banner warn"><span>📍 Finding you… tap <b>Allow</b> if your iPhone asks.</span></div>`;
+    setTimeout(renderLocBanner, 15000);
+  };
+  $("locX").onclick = () => { locBannerHidden = true; box.innerHTML = ""; };
 }
 
 // ---------- journey banner ----------
@@ -530,12 +552,27 @@ async function compress(file, max) {
   c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
   return await new Promise((r) => c.toBlob(r, "image/jpeg", 0.82));
 }
+let PCS = [];
 async function renderFeed() {
-  const list = await store.postcards();
-  $("feed").innerHTML = list.length
-    ? list.map((p) => `<div class="pc"><img src="${p.url}" loading="lazy" alt="">${p.caption ? `<div class="cap">${esc(p.caption)}</div>` : ""}
-      <div class="by">${esc(nameOf(p.sender))} · ${ago(p.created_at)}</div></div>`).join("")
-    : `<div class="muted">No postcards yet.</div>`;
+  PCS = await store.postcards();
+  const feed = $("feed");
+  if (!PCS.length) { feed.className = "feed"; feed.innerHTML = `<div class="muted">No postcards yet.</div>`; $("pcount").textContent = ""; return; }
+  feed.className = "feed strip";
+  feed.innerHTML = PCS.map((p, i) => `<div class="pc" data-i="${i}"><img src="${p.url}" loading="lazy" alt="">${p.caption ? `<div class="cap">${esc(p.caption)}</div>` : ""}
+    <div class="by">${esc(nameOf(p.sender))} · ${ago(p.created_at)}</div></div>`).join("");
+  const count = () => {
+    const w = feed.firstElementChild ? feed.firstElementChild.getBoundingClientRect().width + 12 : 1;
+    const i = Math.min(PCS.length - 1, Math.round(feed.scrollLeft / w));
+    $("pcount").textContent = PCS.length > 1 ? `${i + 1} of ${PCS.length} · swipe for more` : "";
+  };
+  feed.onscroll = count; count();
+  feed.querySelectorAll(".pc").forEach((el) => (el.onclick = () => {
+    const p = PCS[+el.dataset.i];
+    sheet(`<div class="pcfull"><img src="${p.url}" alt="">${p.caption ? `<div class="cap" style="font-family:Caveat,cursive;font-size:26px;margin-top:10px">${esc(p.caption)}</div>` : ""}
+      <div class="muted" style="margin-top:4px">${esc(nameOf(p.sender))} · ${ago(p.created_at)}</div>
+      <button class="btn" style="width:100%;margin-top:16px" id="closeS">Close</button></div>`);
+    $("closeS").onclick = closeSheet;
+  }));
 }
 function wireUpload() {
   $("file").onchange = async (e) => {
@@ -616,13 +653,13 @@ async function refreshPings() {
   const fresh = PINGS.filter((p) => p.sender !== who && Date.parse(p.created_at) > lastSeen && p.kind !== "loc");
   if (fresh.length && lastSeen) { const p = fresh[0]; toast(evText(p).replace(/<[^>]+>/g, "")); if (p.kind === "heart") float(); }
   if (PINGS[0]) { lastSeen = Math.max(lastSeen, Date.parse(PINGS[0].created_at)); LS.set("lastSeen", lastSeen); }
-  renderActivity(); renderBanner();
+  renderActivity(); renderBanner(); renderLocBanner();
 }
 function tickClocks() { document.querySelectorAll(".clock[data-tz]").forEach((el) => (el.textContent = clockIn(el.dataset.tz))); }
 function renderAll() {
   const two = synced();
   ["locCard", "loveCard", "pcCard"].forEach((id) => ($(id).hidden = !two));
-  renderHeader(); renderBanner(); renderJourney(); renderChips(); renderNotes(); renderLegs(); renderActivity(); renderLocToggle();
+  renderHeader(); renderBanner(); renderLocBanner(); renderJourney(); renderChips(); renderNotes(); renderLegs(); renderActivity(); renderLocToggle();
   $("mode").textContent = `${who ? "This phone: " + nameOf(who) : "Not set up"}${synced() ? " · synced ♡" : ""}`;
   renderSplit(); renderAurora(); renderCall();
 }
@@ -679,7 +716,7 @@ function wirePullToRefresh() {
   setInterval(() => { if (!document.hidden) { renderHeader(); renderJourney(); } }, 30e3);
   setInterval(() => { if (!document.hidden) { refreshPings(); renderLegs(); } }, 60e3); // backup to the instant nudges
   setInterval(() => { if (!document.hidden) { renderSplit(); renderAurora(); renderCall(); } }, 10 * 6e4);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { refreshPings().then(() => { renderAll(); renderFeed(); }); } });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { locBannerHidden = false; refreshPings().then(() => { renderAll(); renderFeed(); }); } });
   if ("serviceWorker" in navigator) {
     // When a new version is published, swap to it automatically (once).
     let reloaded = false;

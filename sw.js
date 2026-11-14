@@ -1,5 +1,5 @@
 // Offline shell: the app opens even with no signal (weather shows last known).
-const CACHE = "us-v14";
+const CACHE = "us-v15";
 const SHELL = ["./", "index.html", "app.js", "config.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {

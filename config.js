@@ -21,7 +21,7 @@ window.LOVE_CONFIG = {
     { id: "rov", name: "Rovaniemi", country: "Finland", flag: "🇫🇮", lat: 66.5039, lon: 25.7294, tz: "Europe/Helsinki",
       note: "Likely first stop by night train (to confirm). On the Arctic Circle." },
     { id: "lev", name: "Levi",      country: "Finland", flag: "🇫🇮", lat: 67.8058, lon: 24.8085, tz: "Europe/Helsinki",
-      note: "Lapland fell resort near Kittilä, about 2.5 hours' drive north of Rovaniemi." },
+      stay: "Her Airbnb · staying 5–6 nights", note: "Lapland fell resort near Kittilä. Her Airbnb for 5–6 nights, then on to Tromsø." },
     { id: "tos", name: "Tromsø",    country: "Norway",  flag: "🇳🇴", lat: 69.6496, lon: 18.9560, tz: "Europe/Oslo",
       note: "The villa, 5 km from the Fjellheisen cable car." },
   ],

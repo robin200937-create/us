@@ -146,6 +146,8 @@ async function onPosition(pos) {
   const stale = !lastSent || Date.now() - lastSent.t > 5 * 6e4;
   if (!moved && !stale) return;
   const n = await placeName(lat, lon);
+  const atStop = snapStop({ lat, lon });
+  if (atStop) { n.city = atStop.name; n.country = atStop.country || n.country; }
   lastSent = { lat, lon, t: Date.now() }; LS.set("lastLocSent", lastSent);
   await safe(() => store.addPing("loc", JSON.stringify({ lat, lon, spd, ...n })));
   if (n.city && n.city !== LS.get("lastCity", "")) { LS.set("lastCity", n.city); await safe(() => store.addPing("visit", JSON.stringify({ lat, lon, ...n }))); }
@@ -180,7 +182,15 @@ function legPlace(l) {
   const s = C.stops.find((x) => x.name === l.to);
   return s || { id: "leg-" + l.id, name: l.to, flag: l.toCode === "DXB" ? "🇦🇪" : "📍", lat: l.toLat, lon: l.toLon, tz: CODE_TZ[l.toCode] || "UTC" };
 }
-const livePlace = (loc) => ({ id: "live", name: loc.city || "Somewhere", flag: flag(loc.cc), lat: loc.lat, lon: loc.lon, tz: null, live: loc.at });
+function snapStop(pt, km = 6) {
+  let best = null;
+  for (const s of C.stops) { const d = haversine(pt, s); if (d <= km && (!best || d < best.d)) best = { s, d }; }
+  return best && best.s;
+}
+const livePlace = (loc) => {
+  const st = snapStop(loc);
+  return { id: st ? st.id : "live", name: st ? st.name : loc.city || "Somewhere", flag: st ? st.flag : flag(loc.cc), lat: loc.lat, lon: loc.lon, tz: st ? st.tz : null, live: loc.at, stay: st && st.stay };
+};
 function herNow(now = Date.now()) {
   const active = legs.find((l) => now >= l.depT && now < l.arrT);
   const fresh = latestLoc("her");
@@ -210,16 +220,16 @@ function eta(from, to, kind, spdMs) {
   return { km: Math.round(km), ms: (km / kmh) * 36e5, live: !!live };
 }
 function nextTarget(st) {
-  const now = Date.now();
   if (st.leg) return { name: st.leg.to, lat: st.leg.toLat, lon: st.leg.toLon, kind: st.leg.kind === "flight" ? "flight" : "train", leg: st.leg };
-  const cur = (st.place && st.place.name || "").toLowerCase();
-  const been = new Set(visits().map((v) => v.name.toLowerCase()));
-  const idx = C.stops.findIndex((s) => s.name.toLowerCase() === cur);
-  const rest = idx >= 0 ? C.stops.slice(idx + 1) : C.stops.filter((s) => !been.has(s.name.toLowerCase()) && s.name.toLowerCase() !== cur);
-  const nextLeg = legs.find((l) => l.depT > now);
-  const s = rest[0];
+  const here = st.place;
+  if (!here || here.lat == null) return null;
+  // Nearest planned stop; if she's already there, the one after it.
+  const ranked = C.stops.map((s, i) => ({ s, i, d: haversine(here, s) })).sort((a, b) => a.d - b.d);
+  const near = ranked[0];
+  const s = near.d <= 6 ? C.stops[near.i + 1] : near.s;
   if (!s) return null;
-  return { name: s.name, lat: s.lat, lon: s.lon, kind: nextLeg && nextLeg.to === s.name ? (nextLeg.kind === "flight" ? "flight" : "train") : "road" };
+  const nextLeg = legs.find((l) => l.depT > Date.now() && l.to === s.name);
+  return { name: s.name, lat: s.lat, lon: s.lon, stay: s.stay, kind: nextLeg ? (nextLeg.kind === "flight" ? "flight" : "train") : "road" };
 }
 function meNow() {
   const loc = latestLoc("me");
@@ -302,13 +312,15 @@ function renderJourney() {
         bar = `${arcSVG(st.leg, t)}<div class="bar"><i style="width:${(t * 100).toFixed(1)}%"></i></div>`;
       }
       const how = tgt.kind === "flight" ? "by air" : tgt.kind === "train" ? "by train" : "by road";
-      box.innerHTML = `<div class="card"><span class="label">${st.leg ? "On the way · live" : "Next stop"}</span>
+      const moving = loc.spd != null && loc.spd > 3;
+      box.innerHTML = `<div class="card"><span class="label">${st.leg ? "On the way · live" : moving ? "On the way · live" : "Next stop"}</span>
         <div class="big">${st.leg ? `${esc(st.place.name)} → ${esc(tgt.name)}` : esc(tgt.name)}</div>
+        ${tgt.stay ? `<div class="hand" style="font-size:22px;color:var(--accent)">${esc(tgt.stay)}</div>` : ""}
         ${bar}
         <div class="row" style="margin-top:8px"><span><b>${e.km.toLocaleString()} km</b> <span class="muted">${how}</span></span><b>about ${fmtDur(e.ms)}</b></div>
         ${st.leg && arrive.getTime() <= st.leg.arrT
           ? `<div class="muted">On track for the scheduled ${clockIn(tzT, new Date(st.leg.arrT))} local · ${clockIn(C.home.tz, new Date(st.leg.arrT))} Singapore</div>`
-          : `<div class="muted">${st.leg ? "Running late? Live estimate:" : "If she left now:"} around ${clockIn(tzT, arrive)} local · ${clockIn(C.home.tz, arrive)} Singapore${e.live ? " (her current speed)" : ""}</div>
+          : `<div class="muted">${st.leg ? "Running late? Live estimate:" : moving ? "At her current speed she arrives" : "If she left now:"} around ${clockIn(tzT, arrive)} local · ${clockIn(C.home.tz, arrive)} Singapore${e.live && !moving ? " (her current speed)" : ""}</div>
              ${st.leg ? `<div class="muted">Scheduled: ${clockIn(tzT, new Date(st.leg.arrT))} local</div>` : ""}`}</div>`;
       return;
     }
@@ -350,6 +362,7 @@ async function fillHalf(el, sender, place, extra = "") {
   }
   el.innerHTML = `<div class="label">${esc(nameOf(sender))}</div>
     <div class="place">${place.flag || ""} ${esc(place.name)}</div>
+    ${place.stay && sender === "her" ? `<div class="sm">${esc(place.stay.split(" · ")[0])}</div>` : ""}
     ${place.live && sender === "her" ? `<a class="sm" style="color:inherit;text-decoration:underline" href="https://maps.apple.com/?ll=${place.lat},${place.lon}&q=${encodeURIComponent(nameOf("her"))}" target="_blank" rel="noopener">Open in Maps</a>` : ""}
     ${place.live ? `<div class="live" ${Date.now() - Date.parse(place.live) > 20 * 6e4 ? 'style="opacity:.6"' : ""}>${Date.now() - Date.parse(place.live) > 20 * 6e4 ? "Last seen" : "Live"} · ${ago(place.live)}</div>` : ""}
     <div class="clock" data-tz="${tz}">${clockIn(tz)}</div><div class="sm">${dayName(tz)}</div>
@@ -442,7 +455,8 @@ async function kpNext12h() {
 }
 async function renderAurora() {
   const st = herNow(), box = $("auroraBox"), p = st.place || {};
-  const target = p.lat >= 64 ? p : C.stops.find((s) => s.lat >= 64);
+  const nt = nextTarget(st);
+  const target = p.lat >= 64 ? p : nt && nt.lat >= 64 ? nt : C.stops.find((s) => s.stay) || C.stops.find((s) => s.lat >= 64);
   if (!target) { box.innerHTML = ""; return; }
   const [kp, d] = await Promise.all([kpNext12h(), weather(target)]);
   const cloud = d ? d.current.cloud_cover : 50, dark = d ? !d.current.is_day : true;

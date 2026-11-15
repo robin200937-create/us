@@ -205,7 +205,20 @@ function herNow(now = Date.now()) {
   const loc = latestLoc("her");
   const locT = loc ? Date.parse(loc.at) : 0;
   // Her real location wins, as long as it's newer than her last landing.
-  if (loc && (!lastDone || locT > lastDone.arrT)) return { mode: "live", place: livePlace(loc) };
+  if (loc && (!lastDone || locT > lastDone.arrT)) {
+    const here = livePlace(loc);
+    if (loc.spd != null && loc.spd > 3) {
+      const tgt = nextTarget({ place: here });
+      if (tgt && tgt.kind === "road") {
+        const e = eta(loc, tgt, "road", loc.spd);
+        if (locT + e.ms <= now) {
+          const stop = C.stops.find((x) => x.name === tgt.name) || tgt;
+          return { mode: "live", place: { ...stop, id: stop.id || "est", live: loc.at, estimated: locT + e.ms } };
+        }
+      }
+    }
+    return { mode: "live", place: here };
+  }
   if (legs.length && now < legs[0].depT) return { mode: "before", place: C.home };
   const checkin = PINGS.find((p) => p.sender === "her" && p.kind === "here");
   if (checkin && (!lastDone || Date.parse(checkin.created_at) > lastDone.arrT) && stopById(checkin.text)) return { mode: "stay", place: stopById(checkin.text) };
@@ -301,10 +314,16 @@ function arcSVG(l, t) {
 function renderJourney() {
   const now = Date.now(), st = herNow(now), box = $("journey");
   if (st.mode === "live" && dateIn(C.home.tz) <= C.tripEnd) {
-    const loc = latestLoc("her"), tgt = nextTarget(st);
+    const raw = latestLoc("her"), tgt = nextTarget(st);
+    // If we've assumed she arrived somewhere, plan the next leg from there, standing still.
+    const loc = raw && st.place.estimated ? { ...raw, lat: st.place.lat, lon: st.place.lon, spd: 0, at: new Date(st.place.estimated).toISOString() } : raw;
     if (tgt && loc && haversine(loc, tgt) > 3) {
       const e = eta(loc, tgt, tgt.kind, loc.spd);
-      const arrive = new Date(now + e.ms);
+      const locT = Date.parse(loc.at);
+      const movingNow = loc.spd != null && loc.spd > 3;
+      // While she's travelling, the clock keeps running from her last update.
+      const arrive = new Date((movingNow || st.leg ? locT : now) + e.ms);
+      const left = arrive.getTime() - now;
       const tzT = (st.leg && CODE_TZ[st.leg.toCode]) || (C.stops.find((s) => s.name === tgt.name) || {}).tz || C.home.tz;
       let bar = "";
       if (st.leg) {
@@ -318,10 +337,11 @@ function renderJourney() {
         <div class="big">${st.leg ? `${esc(st.place.name)} → ${esc(tgt.name)}` : esc(tgt.name)}</div>
         ${tgt.stay ? `<div class="hand" style="font-size:22px;color:var(--accent)">${esc(tgt.stay)}</div>` : ""}
         ${bar}
-        <div class="row" style="margin-top:8px"><span><b>${e.km.toLocaleString()} km</b> <span class="muted">${how}</span></span><b>about ${fmtDur(e.ms)}</b></div>
+        <div class="row" style="margin-top:8px"><span><b>${e.km.toLocaleString()} km</b> <span class="muted">${how}</span></span><b>${movingNow || st.leg ? (left > 60e3 ? `about ${fmtDur(left)} left` : "arriving now") : `about ${fmtDur(e.ms)}`}</b></div>
         ${st.leg && arrive.getTime() <= st.leg.arrT
-          ? `<div class="muted">On track for the scheduled ${clockIn(tzT, new Date(st.leg.arrT))} local · ${clockIn(C.home.tz, new Date(st.leg.arrT))} Singapore</div>`
+          ? `${Date.now() - locT > 10 * 6e4 ? `<div class="muted">Estimated from her last update ${ago(loc.at)}</div>` : ""}<div class="muted">On track for the scheduled ${clockIn(tzT, new Date(st.leg.arrT))} local · ${clockIn(C.home.tz, new Date(st.leg.arrT))} Singapore</div>`
           : `<div class="muted">${st.leg ? "Running late? Live estimate:" : moving ? "At her current speed she arrives" : "If she left now:"} around ${clockIn(tzT, arrive)} local · ${clockIn(C.home.tz, arrive)} Singapore${e.live && !moving ? " (her current speed)" : ""}</div>
+             ${moving && Date.now() - locT > 10 * 6e4 ? `<div class="muted">Estimated from her last update ${ago(loc.at)}</div>` : ""}
              ${st.leg ? `<div class="muted">Scheduled: ${clockIn(tzT, new Date(st.leg.arrT))} local</div>` : ""}`}</div>`;
       return;
     }
@@ -365,7 +385,8 @@ async function fillHalf(el, sender, place, extra = "") {
     <div class="place">${place.flag || ""} ${esc(place.name)}</div>
     ${place.stay && sender === "her" ? `<div class="sm">${esc(place.stay.split(" · ")[0])}</div>` : ""}
     ${place.live && sender === "her" ? `<a class="sm" style="color:inherit;text-decoration:underline" href="https://maps.apple.com/?ll=${place.lat},${place.lon}&q=${encodeURIComponent(nameOf("her"))}" target="_blank" rel="noopener">Open in Maps</a>` : ""}
-    ${place.live ? `<div class="live" ${Date.now() - Date.parse(place.live) > 20 * 6e4 ? 'style="opacity:.6"' : ""}>${Date.now() - Date.parse(place.live) > 20 * 6e4 ? "Last seen" : "Live"} · ${ago(place.live)}</div>` : ""}
+    ${place.estimated ? `<div class="sm" style="margin-top:3px">Probably arrived around ${clockIn(place.tz || C.home.tz, new Date(place.estimated))} · last update ${ago(place.live)}</div>` : ""}
+    ${place.live && !place.estimated ? `<div class="live" ${Date.now() - Date.parse(place.live) > 20 * 6e4 ? 'style="opacity:.6"' : ""}>${Date.now() - Date.parse(place.live) > 20 * 6e4 ? "Last seen" : "Live"} · ${ago(place.live)}</div>` : ""}
     <div class="clock" data-tz="${tz}">${clockIn(tz)}</div><div class="sm">${dayName(tz)}</div>
     ${wx}${extra}<div class="status">${status}</div>`;
   return d ? { d, tz } : { d: null, tz };

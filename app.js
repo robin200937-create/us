@@ -313,6 +313,18 @@ function arcSVG(l, t) {
 }
 function renderJourney() {
   const now = Date.now(), st = herNow(now), box = $("journey");
+  if (st.mode === "live" && dateIn(C.home.tz) <= C.tripEnd && st.place.stay && !st.leg) {
+    // She's at a place she's staying (e.g. her Levi Airbnb): show that, no "next stop" yet.
+    const tz = st.place.tz || C.home.tz;
+    const since = st.place.estimated
+      ? `Probably arrived around ${clockIn(tz, new Date(st.place.estimated))} local · ${clockIn(C.home.tz, new Date(st.place.estimated))} Singapore`
+      : `Here now · last update ${ago(st.place.live)}`;
+    box.innerHTML = `<div class="card"><span class="label">Staying at</span>
+      <div class="big">${esc(st.place.name)}</div>
+      <div class="hand" style="font-size:22px;color:var(--accent)">${esc(st.place.stay)}</div>
+      <div class="muted" style="margin-top:6px">${since}</div></div>`;
+    return;
+  }
   if (st.mode === "live" && dateIn(C.home.tz) <= C.tripEnd) {
     const raw = latestLoc("her"), tgt = nextTarget(st);
     // If we've assumed she arrived somewhere, plan the next leg from there, standing still.

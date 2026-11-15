@@ -133,7 +133,8 @@ function latestLoc(sender) {
 async function placeName(lat, lon) {
   try {
     const r = await (await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`)).json();
-    return { city: r.city || r.locality || r.principalSubdivision || "", country: r.countryName || "", cc: r.countryCode || "" };
+    const city = (r.city || r.locality || r.principalSubdivision || "").replace(/^Kittila$/, "Kittilä");
+    return { city, country: r.countryName || "", cc: r.countryCode || "" };
   } catch { return { city: "", country: "", cc: "" }; }
 }
 const flag = (cc) => (cc && cc.length === 2 ? String.fromCodePoint(...[...cc.toUpperCase()].map((c) => 127397 + c.charCodeAt(0))) : "📍");
@@ -189,7 +190,7 @@ function snapStop(pt, km = 6) {
 }
 const livePlace = (loc) => {
   const st = snapStop(loc);
-  return { id: st ? st.id : "live", name: st ? st.name : loc.city || "Somewhere", flag: st ? st.flag : flag(loc.cc), lat: loc.lat, lon: loc.lon, tz: st ? st.tz : null, live: loc.at, stay: st && st.stay };
+  return { id: st ? st.id : "live", name: st ? st.name : (loc.city === "Kittila" ? "Kittilä" : loc.city) || "Somewhere", flag: st ? st.flag : flag(loc.cc), lat: loc.lat, lon: loc.lon, tz: st ? st.tz : null, live: loc.at, stay: st && st.stay };
 };
 function herNow(now = Date.now()) {
   const active = legs.find((l) => now >= l.depT && now < l.arrT);
@@ -405,12 +406,16 @@ function visits() {
   [...PINGS].reverse().filter((p) => p.sender === "her" && p.kind === "visit").forEach((p) => {
     try { const v = JSON.parse(p.text); const k = (v.city || "").toLowerCase(); if (k && !seen.has(k)) seen.set(k, { ...v, since: p.created_at }); } catch {}
   });
-  return [...seen.values()].map((v, i) => ({ id: "v" + i, name: v.city, flag: flag(v.cc), lat: v.lat, lon: v.lon, tz: null, since: v.since }));
+  return [...seen.values()].map((v, i) => ({ id: "v" + i, name: v.city === "Kittila" ? "Kittilä" : v.city, flag: flag(v.cc), lat: v.lat, lon: v.lon, tz: null, since: v.since }));
 }
 let PLACES = [];
 function renderChips() {
   const st = herNow(), cur = st.place && st.place.name;
-  const been = visits();
+  // Places she's been: stops marked as visited in config, plus towns her phone reported, oldest first.
+  const fromConfig = C.stops.filter((s) => s.visited).map((s) => ({ ...s, since: s.visited.includes("T") ? s.visited : s.visited + "T12:00:00Z" }));
+  const merged = new Map();
+  [...fromConfig, ...visits()].forEach((v) => { const k = v.name.toLowerCase(); if (!merged.has(k)) merged.set(k, v); });
+  const been = [...merged.values()].sort((x, y) => Date.parse(x.since) - Date.parse(y.since));
   const beenNames = new Set(been.map((v) => v.name.toLowerCase()));
   const planned = C.stops.filter((s) => !beenNames.has(s.name.toLowerCase())).map((s) => ({ ...s, planned: true }));
   PLACES = [{ ...C.home, id: "home", homeChip: true }, ...been, ...planned];

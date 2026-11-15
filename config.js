@@ -16,10 +16,10 @@ window.LOVE_CONFIG = {
   // Her side follows her phone's real location when she shares it; these are
   // only a fallback, and she can tap one and choose "I'm here now".
   stops: [
-    { id: "hel", name: "Helsinki",  country: "Finland", flag: "🇫🇮", lat: 60.1699, lon: 24.9384, tz: "Europe/Helsinki",
+    { id: "hel", name: "Helsinki",  country: "Finland", flag: "🇫🇮", lat: 60.1699, lon: 24.9384, tz: "Europe/Helsinki", visited: "2026-11-14T11:55:00Z",
       note: "Lands 1:55 pm." },
-    { id: "rov", name: "Rovaniemi", country: "Finland", flag: "🇫🇮", lat: 66.5039, lon: 25.7294, tz: "Europe/Helsinki",
-      note: "Likely first stop by night train (to confirm). On the Arctic Circle." },
+    { id: "rov", name: "Rovaniemi", country: "Finland", flag: "🇫🇮", lat: 66.5039, lon: 25.7294, tz: "Europe/Helsinki", visited: "2026-11-15T05:20:00Z",
+      note: "Night train from Helsinki, then the bus north. On the Arctic Circle." },
     { id: "lev", name: "Levi",      country: "Finland", flag: "🇫🇮", lat: 67.8058, lon: 24.8085, tz: "Europe/Helsinki",
       stay: "Her Airbnb · staying 5–6 nights", note: "Lapland fell resort near Kittilä. Her Airbnb for 5–6 nights, then on to Tromsø." },
     { id: "tos", name: "Tromsø",    country: "Norway",  flag: "🇳🇴", lat: 69.6496, lon: 18.9560, tz: "Europe/Oslo",

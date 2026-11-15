@@ -46,7 +46,7 @@ window.LOVE_CONFIG = {
   notes: [
     "You're somewhere over the ocean right now and I'm already counting. Drink water, sleep a little, and message me when you land.",
     "You woke up above the Arctic Circle. Tell me what it looks like out the window.",
-    "Wear the thermals. Both layers. I mean it.",
+    "Can you please make sure that you wear your thermals and keep yourself warm? I miss you so much.",
     "If you see a reindeer, I need a photo. Non-negotiable.",
     "You're seeing real snow right now. Send me one photo of it and I'll send you one of the rain here.",
     "Look up tonight. Same sky, just a lot colder on your side.",

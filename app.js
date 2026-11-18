@@ -18,6 +18,12 @@ function tzOffsetH(tz, d = new Date()) {
   const p = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "shortOffset" }).formatToParts(d).find((x) => x.type === "timeZoneName").value;
   const m = p.match(/GMT([+-]\d+)(?::(\d+))?/); return m ? +m[1] + (m[2] ? Math.sign(+m[1]) * m[2] / 60 : 0) : 0;
 }
+function zoned(local, tz) {
+  // "2026-11-20T18:30" in tz -> Date
+  const guess = Date.parse(local + "Z");
+  const off = tzOffsetH(tz, new Date(guess));
+  return new Date(guess - off * 36e5);
+}
 const CODE_TZ = { SIN: "Asia/Singapore", DXB: "Asia/Dubai", HEL: "Europe/Helsinki", HKI: "Europe/Helsinki", ROI: "Europe/Helsinki", TOS: "Europe/Oslo" };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function haversine(a, b) {
@@ -205,6 +211,15 @@ function herNow(now = Date.now()) {
   const loc = latestLoc("her");
   const locT = loc ? Date.parse(loc.at) : 0;
   // Her real location wins, as long as it's newer than her last landing.
+  const stayNow = C.stops.find((x) => x.stay && x.stayFrom && now >= Date.parse(x.stayFrom) && now < Date.parse(x.stayUntil));
+  if (loc && (!lastDone || locT > lastDone.arrT) && now - locT > 6 * 36e5 && stayNow && !(snapStop(loc) && snapStop(loc).id === stayNow.id)) {
+    return { mode: "live", place: { ...stayNow, live: loc.at, assumed: true } };
+  }
+  const nextStay = C.stops.find((x) => x.stayFrom && now < Date.parse(x.stayFrom));
+  const prevStay = [...C.stops].reverse().find((x) => x.stayUntil && now >= Date.parse(x.stayUntil));
+  if (loc && now - locT > 3 * 36e5 && !stayNow && nextStay && prevStay && Date.parse(nextStay.stayFrom) - Date.parse(prevStay.stayUntil) < 24 * 36e5) {
+    return { mode: "travel", place: { ...nextStay, live: loc.at, travelling: true }, from: prevStay };
+  }
   if (loc && (!lastDone || locT > lastDone.arrT)) {
     const here = livePlace(loc);
     if (loc.spd != null && loc.spd > 3) {
@@ -313,10 +328,19 @@ function arcSVG(l, t) {
 }
 function renderJourney() {
   const now = Date.now(), st = herNow(now), box = $("journey");
+  if (st.mode === "travel") {
+    box.innerHTML = `<div class="card"><span class="label">Travel day</span>
+      <div class="big">${esc(st.from.name)} → ${esc(st.place.name)}</div>
+      ${st.place.stay ? `<div class="hand" style="font-size:22px;color:var(--accent)">${esc(st.place.stay)}</div>` : ""}
+      <div class="muted" style="margin-top:6px">On her way today. Her side will update when she opens the app.</div></div>`;
+    return;
+  }
   if (st.mode === "live" && dateIn(C.home.tz) <= C.tripEnd && st.place.stay && !st.leg) {
     // She's at a place she's staying (e.g. her Levi Airbnb): show that, no "next stop" yet.
     const tz = st.place.tz || C.home.tz;
-    const since = st.place.estimated
+    const since = st.place.assumed
+      ? `Probably here · her last update was ${ago(st.place.live)}`
+      : st.place.estimated
       ? `Probably arrived around ${clockIn(tz, new Date(st.place.estimated))} local · ${clockIn(C.home.tz, new Date(st.place.estimated))} Singapore`
       : `Here now · last update ${ago(st.place.live)}`;
     box.innerHTML = `<div class="card"><span class="label">Staying at</span>
@@ -397,8 +421,10 @@ async function fillHalf(el, sender, place, extra = "") {
     <div class="place">${place.flag || ""} ${esc(place.name)}</div>
     ${place.stay && sender === "her" ? `<div class="sm">${esc(place.stay.split(" · ")[0])}</div>` : ""}
     ${place.live && sender === "her" ? `<a class="sm" style="color:inherit;text-decoration:underline" href="https://maps.apple.com/?ll=${place.lat},${place.lon}&q=${encodeURIComponent(nameOf("her"))}" target="_blank" rel="noopener">Open in Maps</a>` : ""}
+    ${place.travelling ? `<div class="sm" style="margin-top:3px">On her way here today</div>` : ""}
+    ${place.assumed ? `<div class="sm" style="margin-top:3px">Probably here · last update ${ago(place.live)}</div>` : ""}
     ${place.estimated ? `<div class="sm" style="margin-top:3px">Probably arrived around ${clockIn(place.tz || C.home.tz, new Date(place.estimated))} · last update ${ago(place.live)}</div>` : ""}
-    ${place.live && !place.estimated ? `<div class="live" ${Date.now() - Date.parse(place.live) > 20 * 6e4 ? 'style="opacity:.6"' : ""}>${Date.now() - Date.parse(place.live) > 20 * 6e4 ? "Last seen" : "Live"} · ${ago(place.live)}</div>` : ""}
+    ${place.live && !place.estimated && !place.assumed ? `<div class="live" ${Date.now() - Date.parse(place.live) > 20 * 6e4 ? 'style="opacity:.6"' : ""}>${Date.now() - Date.parse(place.live) > 20 * 6e4 ? "Last seen" : "Live"} · ${ago(place.live)}</div>` : ""}
     <div class="clock" data-tz="${tz}">${clockIn(tz)}</div><div class="sm">${dayName(tz)}</div>
     ${wx}${extra}<div class="status">${status}</div>`;
   return d ? { d, tz } : { d: null, tz };
@@ -505,6 +531,28 @@ async function renderAurora() {
     <div class="row"><span class="serif" style="font-size:40px;line-height:1">${score}%</span><span>${verdict}</span></div>
     <div class="meter"><i style="width:${score}%"></i></div>
     <div style="font-size:12px;opacity:.75">Kp ${kp == null ? "–" : kp.toFixed(1)} next 12h · ${cloud}% cloud · ${dark ? "dark now" : "daylight now"}. A rough estimate, not a forecast.</div></div>`;
+}
+
+// ---------- coming up ----------
+function renderPlans() {
+  const box = $("plansBox"), list = C.plans || [];
+  const now = Date.now();
+  const items = list.map((p) => {
+    const a = zoned(p.start, p.tz), b = p.end ? zoned(p.end, p.tz) : new Date(a.getTime() + 2 * 36e5);
+    return { ...p, a, b };
+  }).filter((p) => p.b.getTime() > now).slice(0, 4);
+  if (!items.length) { box.hidden = true; return; }
+  box.hidden = false;
+  const day = (d, tz) => new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: "short", day: "numeric", month: "short" }).format(d);
+  $("plans").innerHTML = items.map((p) => {
+    const nowOn = now >= p.a.getTime() && now < p.b.getTime();
+    const herT = `${clockIn(p.tz, p.a)}${p.end ? "–" + clockIn(p.tz, p.b) : ""}`;
+    const sgT = `${clockIn(C.home.tz, p.a)}${p.end ? "–" + clockIn(C.home.tz, p.b) : ""}`;
+    return `<div class="plan ${nowOn ? "now" : ""}"><div class="when"><b>${nowOn ? "Now" : day(p.a, p.tz)}</b>${herT} her time</div>
+      <div class="what"><div style="font-weight:500">${esc(p.title)}</div>
+      <div class="muted">${p.sub ? esc(p.sub) + " · " : ""}${sgT} Singapore</div>
+      ${p.free ? `<span class="free">Good time to call</span>` : ""}</div></div>`;
+  }).join("");
 }
 
 // ---------- best time to call ----------
@@ -713,7 +761,7 @@ function renderAll() {
   ["locCard", "loveCard", "pcCard"].forEach((id) => ($(id).hidden = !two));
   renderHeader(); renderBanner(); renderLocBanner(); renderJourney(); renderChips(); renderNotes(); renderLegs(); renderActivity(); renderLocToggle();
   $("mode").textContent = `${who ? "This phone: " + nameOf(who) : "Not set up"}${synced() ? " · synced ♡" : ""}`;
-  renderSplit(); renderAurora(); renderCall();
+  renderSplit(); renderAurora(); renderCall(); renderPlans();
 }
 
 // ---------- refresh (button + swipe down) ----------

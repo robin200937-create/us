@@ -21,9 +21,11 @@ window.LOVE_CONFIG = {
     { id: "rov", name: "Rovaniemi", country: "Finland", flag: "🇫🇮", lat: 66.5039, lon: 25.7294, tz: "Europe/Helsinki", visited: "2026-11-15T05:20:00Z",
       note: "Night train from Helsinki, then the bus north. On the Arctic Circle." },
     { id: "lev", name: "Levi",      country: "Finland", flag: "🇫🇮", lat: 67.8058, lon: 24.8085, tz: "Europe/Helsinki",
-      stay: "Her Airbnb · staying 5–6 nights", note: "Lapland fell resort near Kittilä. Her Airbnb for 5–6 nights, then on to Tromsø." },
-    { id: "tos", name: "Tromsø",    country: "Norway",  flag: "🇳🇴", lat: 69.6496, lon: 18.9560, tz: "Europe/Oslo",
-      note: "The villa, 5 km from the Fjellheisen cable car." },
+      stay: "Her Airbnb · staying 5–6 nights", stayFrom: "2026-11-15T10:30:00Z", stayUntil: "2026-11-19T10:00:00Z",
+      note: "Lapland fell resort near Kittilä. Her Airbnb until Thu 19 Nov, then on to Tromsø." },
+    { id: "tos", name: "Tromsø",    country: "Norway",  flag: "🇳🇴", lat: 69.6067, lon: 18.9391, tz: "Europe/Oslo",
+      stay: "Her villa · 4 bedrooms", stayFrom: "2026-11-19T17:00:00Z", stayUntil: "2026-11-24T23:00:00Z",
+      note: "Nedre Solligården 2, Tromsdalen. Across the bridge from town, about 5 km from the Fjellheisen cable car." },
   ],
 
   // ---- Travel legs (times include their local UTC offset).
@@ -40,6 +42,18 @@ window.LOVE_CONFIG = {
     // Add the Rovaniemi → Tromsø leg and the flights home here once known, e.g.
     // { id: "home1", kind: "flight", code: "EK 168", from: "Helsinki", fromCode: "HEL", to: "Dubai", toCode: "DXB",
     //   dep: "2026-11-24T15:45:00+02:00", arr: "2026-11-25T00:20:00+04:00", fromLat: 60.3172, fromLon: 24.9633, toLat: 25.2532, toLon: 55.3657 },
+  ],
+
+  // ---- What she's got coming up (her local times). free: true = a good time to call.
+  plans: [
+    { start: "2026-11-19T13:00", tz: "Europe/Helsinki", title: "Flight to Tromsø", sub: "Via Helsinki · exact times to confirm" },
+    { start: "2026-11-20T09:00", end: "2026-11-20T12:00", tz: "Europe/Oslo", title: "Free morning", free: true },
+    { start: "2026-11-20T18:30", tz: "Europe/Oslo", title: "Northern Lights" },
+    { start: "2026-11-21T10:00", end: "2026-11-21T15:00", tz: "Europe/Oslo", title: "Fjord expedition" },
+    { start: "2026-11-21T16:00", end: "2026-11-21T22:00", tz: "Europe/Oslo", title: "Free evening", free: true },
+    { start: "2026-11-22T12:30", tz: "Europe/Oslo", title: "Cable car (Fjellheisen)" },
+    { start: "2026-11-23T13:30", end: "2026-11-23T16:30", tz: "Europe/Oslo", title: "Cross-country skiing" },
+    { start: "2026-11-23T16:30", tz: "Europe/Oslo", title: "IceBar + club in Tromsø", sub: "From 4:30 pm onwards" },
   ],
 
   // ---- One note per day. Day 1 = 14 Nov. Unlocks at midnight Singapore time.

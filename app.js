@@ -24,7 +24,8 @@ function zoned(local, tz) {
   const off = tzOffsetH(tz, new Date(guess));
   return new Date(guess - off * 36e5);
 }
-const CODE_TZ = { SIN: "Asia/Singapore", DXB: "Asia/Dubai", HEL: "Europe/Helsinki", HKI: "Europe/Helsinki", ROI: "Europe/Helsinki", TOS: "Europe/Oslo" };
+const CODE_TZ = { SIN: "Asia/Singapore", DXB: "Asia/Dubai", HEL: "Europe/Helsinki", HKI: "Europe/Helsinki", ROI: "Europe/Helsinki", TOS: "Europe/Oslo", OSL: "Europe/Oslo", FRA: "Europe/Berlin" };
+const CODE_FLAG = { DXB: "🇦🇪", FRA: "🇩🇪", SIN: "🇸🇬", HEL: "🇫🇮", OSL: "🇳🇴" };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function haversine(a, b) {
   const R = 6371, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
@@ -187,7 +188,7 @@ const legs = C.legs.map((l) => ({ ...l, depT: Date.parse(l.dep), arrT: Date.pars
 const stopById = (id) => C.stops.find((s) => s.id === id);
 function legPlace(l) {
   const s = C.stops.find((x) => x.name === l.to);
-  return s || { id: "leg-" + l.id, name: l.to, flag: l.toCode === "DXB" ? "🇦🇪" : "📍", lat: l.toLat, lon: l.toLon, tz: CODE_TZ[l.toCode] || "UTC" };
+  return s || { id: "leg-" + l.id, name: l.to, flag: CODE_FLAG[l.toCode] || "📍", lat: l.toLat, lon: l.toLon, tz: CODE_TZ[l.toCode] || "UTC" };
 }
 function snapStop(pt, km = 6) {
   let best = null;
@@ -388,7 +389,7 @@ function renderJourney() {
       <div class="big">${l.kind === "train" ? "Sleep well on the train." : "Safe flight."}</div>
       ${arcSVG(l, t)}<div class="bar"><i style="width:${(t * 100).toFixed(1)}%"></i></div>
       <div class="row muted" style="margin-top:8px"><span>${l.from} → ${l.to}</span><span>${fmtDur(l.arrT - now)} left</span></div>
-      <div class="muted">Arrives ${clockIn(CODE_TZ[l.toCode] || "UTC", new Date(l.arrT))} local · ${clockIn(C.home.tz, new Date(l.arrT))} Singapore</div></div>`;
+      <div class="muted">Arrives ${(CODE_TZ[l.toCode] || "UTC") === C.home.tz ? clockIn(C.home.tz, new Date(l.arrT)) + " Singapore time" : clockIn(CODE_TZ[l.toCode] || "UTC", new Date(l.arrT)) + " local · " + clockIn(C.home.tz, new Date(l.arrT)) + " Singapore"}</div></div>`;
     return;
   }
   const next = legs.find((l) => l.depT > now);

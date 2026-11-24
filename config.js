@@ -24,7 +24,7 @@ window.LOVE_CONFIG = {
       stay: "Her Airbnb · staying 5–6 nights", stayFrom: "2026-11-15T10:30:00Z", stayUntil: "2026-11-19T10:00:00Z",
       note: "Lapland fell resort near Kittilä. Her Airbnb until Thu 19 Nov, then on to Tromsø." },
     { id: "tos", name: "Tromsø",    country: "Norway",  flag: "🇳🇴", lat: 69.6067, lon: 18.9391, tz: "Europe/Oslo",
-      stay: "Her villa · 4 bedrooms", stayFrom: "2026-11-19T17:00:00Z", stayUntil: "2026-11-24T23:00:00Z",
+      stay: "Her villa · 4 bedrooms", stayFrom: "2026-11-19T17:00:00Z", stayUntil: "2026-11-24T14:30:00Z",
       note: "Nedre Solligården 2, Tromsdalen. Across the bridge from town, about 5 km from the Fjellheisen cable car." },
   ],
 
@@ -39,9 +39,13 @@ window.LOVE_CONFIG = {
     { id: "vr265", kind: "train", code: "Santa Claus Express", from: "Helsinki", fromCode: "HKI", to: "Rovaniemi", toCode: "ROI",
       dep: "2026-11-14T19:29:00+02:00", arr: "2026-11-15T07:20:00+02:00",
       fromLat: 60.1719, fromLon: 24.9414, toLat: 66.4987, toLon: 25.7123, detail: "Night sleeper · likely train (or the 23:13) — CONFIRM" },
-    // Add the Rovaniemi → Tromsø leg and the flights home here once known, e.g.
-    // { id: "home1", kind: "flight", code: "EK 168", from: "Helsinki", fromCode: "HEL", to: "Dubai", toCode: "DXB",
-    //   dep: "2026-11-24T15:45:00+02:00", arr: "2026-11-25T00:20:00+04:00", fromLat: 60.3172, fromLon: 24.9633, toLat: 25.2532, toLon: 55.3657 },
+    // Trip home. Times are the usual schedules, not her booking: update once she sends flight numbers.
+    { id: "lh879", kind: "flight", code: "LH 879", from: "Tromsø", fromCode: "TOS", to: "Frankfurt", toCode: "FRA",
+      dep: "2026-11-24T16:15:00+01:00", arr: "2026-11-24T19:50:00+01:00",
+      fromLat: 69.6833, fromLon: 18.9189, toLat: 50.0379, toLon: 8.5622, detail: "Lufthansa direct · about 3h 35m · times estimated" },
+    { id: "sq325", kind: "flight", code: "SQ 325", from: "Frankfurt", fromCode: "FRA", to: "Singapore", toCode: "SIN",
+      dep: "2026-11-24T21:40:00+01:00", arr: "2026-11-25T16:30:00+08:00",
+      fromLat: 50.0379, fromLon: 8.5622, toLat: 1.3644, toLon: 103.9915, detail: "Direct to Singapore · about 12h 50m · likely SQ 325 or Lufthansa ~21:50" },
   ],
 
   // ---- What she's got coming up (her local times). free: true = a good time to call.
@@ -54,6 +58,8 @@ window.LOVE_CONFIG = {
     { start: "2026-11-22T12:30", tz: "Europe/Oslo", title: "Cable car (Fjellheisen)" },
     { start: "2026-11-23T13:30", end: "2026-11-23T16:30", tz: "Europe/Oslo", title: "Cross-country skiing" },
     { start: "2026-11-23T16:30", tz: "Europe/Oslo", title: "IceBar + club in Tromsø", sub: "From 4:30 pm onwards" },
+    { start: "2026-11-24T16:15", tz: "Europe/Oslo", title: "Flight to Frankfurt", sub: "About 4-something pm · lands ~7:50 pm" },
+    { start: "2026-11-24T21:40", tz: "Europe/Berlin", title: "Flight home to Singapore", sub: "Direct from Frankfurt · lands ~4:30 pm Singapore, Wed 25 Nov" },
   ],
 
   // ---- One note per day. Day 1 = 14 Nov. Unlocks at midnight Singapore time.
